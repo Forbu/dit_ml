@@ -24,7 +24,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        uv sync
+        uv sync --extra dev
 
     - name: Run Pylint and save score
       run: |
