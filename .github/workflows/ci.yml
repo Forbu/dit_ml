@@ -28,12 +28,12 @@ jobs:
 
     - name: Run Pylint and save score
       run: |
-        pylint dit_ml tests > pylint_output.txt || true # Allow failure so workflow continues
+        uv run pylint dit_ml tests > pylint_output.txt || true # Allow failure so workflow continues
 
     - name: Run tests with pytest
       id: run_tests # Add this ID to reference the step outcome
       run: |
-        pytest --junitxml=report.xml --cov=dit_ml tests/
+        uv run pytest --junitxml=report.xml --cov=dit_ml tests/
 
     - name: Generate Badges
       uses: action-badges/core@0.3.0
