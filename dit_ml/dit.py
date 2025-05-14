@@ -115,18 +115,17 @@ class DiT(nn.Module):
         num_heads=16,
         mlp_ratio=4.0,
         learn_sigma=True,
-        num_patches=32*32,
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
         self.in_channels = in_channels
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
         self.num_heads = num_heads
-        self.num_patches = num_patches
+        self.num_patches = input_size * input_size
 
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(
-            torch.zeros(1, num_patches, hidden_size), requires_grad=False
+            torch.zeros(1, self.num_patches, hidden_size), requires_grad=False
         )
 
         self.blocks = nn.ModuleList(
