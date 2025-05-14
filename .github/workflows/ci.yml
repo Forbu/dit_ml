@@ -26,6 +26,10 @@ jobs:
       run: |
         uv sync --extra dev
 
+    - name: Install project in editable mode
+      run: |
+        uv pip install -e .
+
     - name: Run Pylint and save score
       run: |
         uv run pylint dit_ml tests > pylint_output.txt || true # Allow failure so workflow continues
