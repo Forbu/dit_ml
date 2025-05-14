@@ -1,7 +1,0 @@
-[project]
-name = "dit-packaged" # Placeholder name
-version = "0.1.0" # Placeholder version
-
-[project.dependencies]
-torch = "*" 
-timm = "*" 
