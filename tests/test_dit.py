@@ -7,7 +7,7 @@ def test_dit_init():
     """Test the initialization of the DiT model."""
     input_size = 32
     in_channels = 4
-    hidden_size = 64 # Use a smaller size for faster testing
+    hidden_size = 8 # Use a smaller size for faster testing
     depth = 2 # Use a smaller depth
     num_heads = 4 # Use a smaller number of heads
     learn_sigma = True
