@@ -1,16 +1,16 @@
-[tool.poetry]
+[project]
 name = "dit-packaged"
 version = "0.1.0"
-description = "DiT packaged (Diffusion Transoformer)"
-authors = ["Adrien Bufort <adrien.bufort@orange.com>"]
-license = "Apache 2.0"
+description = "DiT (Diffusion Transformer)"
 readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "timm>=1.0.15",
+    "torch>=2.7.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
+[tool.setuptools]
+packages = ["dit_packaged"]
 
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.setuptools.packages.find]
+where = ["."] # Assuming the package directory 'dit_packaged' is at the root level
