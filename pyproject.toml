@@ -18,3 +18,9 @@ dev = [
 
 [tool.setuptools]
 packages = ["dit_ml"]
+
+[dependency-groups]
+dev = [
+    "pylint>=3.3.7",
+    "pytest>=8.3.5",
+]
