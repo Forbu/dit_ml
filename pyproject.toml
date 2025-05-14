@@ -1,5 +1,5 @@
 [project]
-name = "dit-packaged"
+name = "dit-ml"
 version = "0.1.0"
 description = "DiT (Diffusion Transformer)"
 readme = "README.md"
@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["dit_packaged"]
+packages = ["dit_ml"]
 
 [tool.setuptools.packages.find]
-where = ["."] # Assuming the package directory 'dit_packaged' is at the root level
+where = ["."] # Assuming the package directory 'dit_ml' is at the root level
