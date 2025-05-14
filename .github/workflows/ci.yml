@@ -24,17 +24,11 @@ jobs:
 
     - name: Install dependencies
       run: |
-        uv sync
+        uv sync --with dev
 
     - name: Run Pylint and save score
       run: |
-        # Install pylint if not in uv.lock
-        uv pip install pylint
         pylint dit_ml tests > pylint_output.txt || true # Allow failure so workflow continues
-
-    - name: Install pytest-cov
-      run: |
-        uv pip install pytest-cov
 
     - name: Run tests with pytest
       id: run_tests # Add this ID to reference the step outcome
