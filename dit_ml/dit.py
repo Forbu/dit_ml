@@ -151,7 +151,7 @@ class DiT(nn.Module):
         pos_embed = get_2d_sincos_pos_embed(
             self.pos_embed.shape[-1], int(self.num_patches**0.5)
         )
-        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+        self.pos_embed.data.copy_(pos_embed.float().unsqueeze(0))
 
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
