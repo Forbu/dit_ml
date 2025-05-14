@@ -7,28 +7,25 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
-
+    name: Pylint
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10' # Use a suitable Python version
+        python-version: '3.10'
 
     - name: Install uv
-      run: |
-        pip install uv
+      run: pip install uv
 
     - name: Install dependencies
-      run: |
-        uv sync --extra dev
+      run: uv sync --extra dev
 
     - name: Install project in editable mode
-      run: |
-        uv pip install -e .
+      run: uv pip install -e .
 
     - name: Run Pylint and save score
       run: |
@@ -39,11 +36,7 @@ jobs:
       run: |
         SCORE=$(grep -oP 'Your code has been rated at \K[\d.]+(?=/10)' pylint_output.txt || echo "N/A")
         echo "SCORE=$SCORE" >> $GITHUB_OUTPUT
-
-    - name: Run tests with pytest
-      id: run_tests # Add this ID to reference the step outcome
-      run: |
-        uv run pytest --junitxml=report.xml --cov=dit_ml tests/
+        echo "Pylint score: $SCORE"
 
     - name: Generate Pylint Badge
       uses: action-badges/core@0.3.0
@@ -54,11 +47,55 @@ jobs:
         message: ${{ steps.extract_pylint_score.outputs.SCORE }}/10
         message-color: green
 
+    - name: Upload Pylint badge
+      uses: actions/upload-artifact@v4
+      with:
+        name: pylint-badge
+        path: pylint_badge.svg
+
+  test:
+    runs-on: ubuntu-latest
+    name: Pytest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install uv
+      run: pip install uv
+
+    - name: Install dependencies
+      run: uv sync --extra dev
+
+    - name: Install project in editable mode
+      run: uv pip install -e .
+
+    - name: Run tests with pytest
+      id: run_tests
+      run: |
+        uv run pytest --junitxml=report.xml --cov=dit_ml tests/
+        echo "Test outcome: ${{ job.status }}"
+
     - name: Generate Tests Badge
       uses: action-badges/core@0.3.0
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         file-name: tests_badge.svg
         label: Tests
-        message: ${{ steps.run_tests.outcome }}
-        message-color: ${{ steps.run_tests.outcome == 'success' && 'green' || 'red' }}
+        message: ${{ job.status }} # Use job status for overall test outcome
+        message-color: ${{ job.status == 'success' && 'green' || 'red' }}
+
+    - name: Upload Tests badge
+      uses: actions/upload-artifact@v4
+      with:
+        name: tests-badge
+        path: tests_badge.svg
+
+    - name: Upload Test Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-report
+        path: report.xml
