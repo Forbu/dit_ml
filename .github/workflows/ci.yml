@@ -42,7 +42,7 @@ jobs:
         pytest --junitxml=report.xml --cov=dit_ml tests/
 
     - name: Generate Badges
-      uses: action-badges/core@v1
+      uses: action-badges/core@0.3.0
       with:
         slug: ${{ github.repository }}
         badges: |
