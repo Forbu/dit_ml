@@ -1,7 +1,7 @@
 <div align="center">
   
 [![PyPI - Version](https://img.shields.io/pypi/v/dit_ml)](https://pypi.org/project/dit_ml/)
-[![Unit tests](https://github.com/CyrilJl/dit_ml/actions/workflows/pytest.yml/badge.svg)](https://github.com/CyrilJl/dit_ml/actions/workflows/pytest.yml)
+[![CI](https://github.com/Forbu/dit_ml/actions/workflows/ci.yml/badge.svg)](https://github.com/Forbu/dit_ml/actions/workflows/ci.yml)
 
 
 </div>
