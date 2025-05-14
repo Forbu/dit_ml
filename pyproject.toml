@@ -12,5 +12,3 @@ dependencies = [
 [tool.setuptools]
 packages = ["dit_ml"]
 
-[tool.setuptools.packages.find]
-where = ["."] # Assuming the package directory 'dit_ml' is at the root level

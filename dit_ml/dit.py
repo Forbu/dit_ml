@@ -115,14 +115,15 @@ class DiT(nn.Module):
         num_heads=16,
         mlp_ratio=4.0,
         learn_sigma=True,
+        num_patches=32*32,
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
         self.in_channels = in_channels
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
         self.num_heads = num_heads
+        self.num_patches = num_patches
 
-        num_patches = self.x_embedder.num_patches
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(
             torch.zeros(1, num_patches, hidden_size), requires_grad=False
@@ -148,32 +149,14 @@ class DiT(nn.Module):
 
         # Initialize (and freeze) pos_embed by sin-cos embedding:
         pos_embed = get_2d_sincos_pos_embed(
-            self.pos_embed.shape[-1], int(self.x_embedder.num_patches**0.5)
+            self.pos_embed.shape[-1], int(self.num_patches**0.5)
         )
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
-
-        # Initialize patch_embed like nn.Linear (instead of nn.Conv2d):
-        w = self.x_embedder.proj.weight.data
-        nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
-        nn.init.constant_(self.x_embedder.proj.bias, 0)
-
-        # Initialize label embedding table:
-        nn.init.normal_(self.y_embedder.embedding_table.weight, std=0.02)
-
-        # Initialize timestep embedding MLP:
-        nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
-        nn.init.normal_(self.t_embedder.mlp[2].weight, std=0.02)
 
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
             nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
-
-        # Zero-out output layers:
-        nn.init.constant_(self.final_layer.adaLN_modulation[-1].weight, 0)
-        nn.init.constant_(self.final_layer.adaLN_modulation[-1].bias, 0)
-        nn.init.constant_(self.final_layer.linear.weight, 0)
-        nn.init.constant_(self.final_layer.linear.bias, 0)
 
 
     def forward(self, x, t):
@@ -184,8 +167,8 @@ class DiT(nn.Module):
         y: (N,) tensor of class labels
         """
         x = (
-            self.x_embedder(x) + self.pos_embed
-        )  # (N, T, D), where T = H * W / patch_size ** 2
+            x + self.pos_embed
+        )
 
         for block in self.blocks:
             x = block(x, t)  # (N, T, D)
