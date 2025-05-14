@@ -38,20 +38,20 @@ jobs:
         echo "SCORE=$SCORE" >> $GITHUB_OUTPUT
         echo "Pylint score: $SCORE"
 
-    - name: Generate Pylint Badge
-      uses: action-badges/core@0.3.0
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        file-name: pylint_badge.svg
-        label: Pylint
-        message: ${{ steps.extract_pylint_score.outputs.SCORE }}/10
-        message-color: green
+    # - name: Generate Pylint Badge
+    #   uses: action-badges/core@0.3.0
+    #   with:
+    #     github-token: ${{ secrets.GITHUB_TOKEN }}
+    #     file-name: pylint_badge.svg
+    #     label: Pylint
+    #     message: ${{ steps.extract_pylint_score.outputs.SCORE }}/10
+    #     message-color: green
 
-    - name: Upload Pylint badge
-      uses: actions/upload-artifact@v4
-      with:
-        name: pylint-badge
-        path: pylint_badge.svg
+    # - name: Upload Pylint badge
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: pylint-badge
+    #     path: pylint_badge.svg
 
   test:
     runs-on: ubuntu-latest
@@ -79,23 +79,23 @@ jobs:
         uv run pytest --junitxml=report.xml --cov=dit_ml tests/
         echo "Test outcome: ${{ job.status }}"
 
-    - name: Generate Tests Badge
-      uses: action-badges/core@0.3.0
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        file-name: tests_badge.svg
-        label: Tests
-        message: ${{ job.status }} # Use job status for overall test outcome
-        message-color: ${{ job.status == 'success' && 'green' || 'red' }}
+    # - name: Generate Tests Badge
+    #   uses: action-badges/core@0.3.0
+    #   with:
+    #     github-token: ${{ secrets.GITHUB_TOKEN }}
+    #     file-name: tests_badge.svg
+    #     label: Tests
+    #     message: ${{ job.status }} # Use job status for overall test outcome
+    #     message-color: ${{ job.status == 'success' && 'green' || 'red' }}
 
-    - name: Upload Tests badge
-      uses: actions/upload-artifact@v4
-      with:
-        name: tests-badge
-        path: tests_badge.svg
+    # - name: Upload Tests badge
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: tests-badge
+    #     path: tests_badge.svg
 
-    - name: Upload Test Report
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-report
-        path: report.xml
+    # - name: Upload Test Report
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: test-report
+    #     path: report.xml
