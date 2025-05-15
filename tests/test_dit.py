@@ -13,8 +13,7 @@ def test_dit_init():
     learn_sigma = True
 
     model = DiT(
-        input_size=input_size,
-        in_channels=in_channels,
+        num_patches=input_size * input_size,
         hidden_size=hidden_size,
         depth=depth,
         num_heads=num_heads,
@@ -33,7 +32,6 @@ def test_dit_init():
 def test_dit_forward():
     """Test the forward pass of the DiT model."""
     input_size = 32
-    in_channels = 4
     hidden_size = 64 # Use a smaller size for faster testing
     depth = 2 # Use a smaller depth
     num_heads = 4 # Use a smaller number of heads
