@@ -41,7 +41,7 @@ def test_dit_forward():
     batch_size = 2
 
     model = DiT(
-        input_size=input_size,
+        num_patches=input_size * input_size,
         in_channels=in_channels,
         hidden_size=hidden_size,
         depth=depth,

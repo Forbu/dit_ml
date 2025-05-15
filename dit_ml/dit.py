@@ -3,8 +3,10 @@ import torch.nn as nn
 
 from timm.models.vision_transformer import Attention, Mlp
 
+
 def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+
 
 def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=0):
     """
@@ -14,14 +16,17 @@ def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=
     """
     grid_h = torch.arange(grid_size, dtype=torch.float32)
     grid_w = torch.arange(grid_size, dtype=torch.float32)
-    grid = torch.meshgrid(grid_w, grid_h, indexing='ij')  # here w goes first
+    grid = torch.meshgrid(grid_w, grid_h, indexing="ij")  # here w goes first
     grid = torch.stack(grid, dim=0)
 
     grid = grid.reshape([2, 1, grid_size, grid_size])
     pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
     if cls_token and extra_tokens > 0:
-        pos_embed = torch.cat([torch.zeros([extra_tokens, embed_dim]), pos_embed], dim=0)
+        pos_embed = torch.cat(
+            [torch.zeros([extra_tokens, embed_dim]), pos_embed], dim=0
+        )
     return pos_embed
+
 
 def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     """
@@ -34,7 +39,7 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
     emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
 
-    emb = torch.cat([emb_h, emb_w], dim=1) # (H*W, D)
+    emb = torch.cat([emb_h, emb_w], dim=1)  # (H*W, D)
     return emb
 
 
@@ -46,14 +51,14 @@ def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     """
     assert embed_dim % 2 == 0
     omega = torch.arange(embed_dim // 2, dtype=torch.float64)
-    omega /= embed_dim / 2.
-    omega = 1. / 10000**omega  # (D/2,)
+    omega /= embed_dim / 2.0
+    omega = 1.0 / 10000**omega  # (D/2,)
 
     pos = pos.reshape(-1)  # (M,)
-    out = torch.einsum('m,d->md', pos, omega)  # (M, D/2), outer product
+    out = torch.einsum("m,d->md", pos, omega)  # (M, D/2), outer product
 
-    emb_sin = torch.sin(out) # (M, D/2)
-    emb_cos = torch.cos(out) # (M, D/2)
+    emb_sin = torch.sin(out)  # (M, D/2)
+    emb_cos = torch.cos(out)  # (M, D/2)
 
     emb = torch.cat([emb_sin, emb_cos], dim=1)  # (M, D)
     return emb
@@ -108,20 +113,19 @@ class DiT(nn.Module):
 
     def __init__(
         self,
-        input_size=32,
-        in_channels=4,
+        num_patches=32 * 32,
         hidden_size=1152,
         depth=28,
         num_heads=16,
         mlp_ratio=4.0,
         learn_sigma=True,
+        dimensionality=2,
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
-        self.in_channels = in_channels
-        self.out_channels = in_channels * 2 if learn_sigma else in_channels
         self.num_heads = num_heads
-        self.num_patches = input_size * input_size
+        self.num_patches = num_patches
+        self.dimensionality = dimensionality
 
         # Will use fixed sin-cos embedding:
         self.pos_embed = nn.Parameter(
@@ -147,9 +151,16 @@ class DiT(nn.Module):
         self.apply(_basic_init)
 
         # Initialize (and freeze) pos_embed by sin-cos embedding:
-        pos_embed = get_2d_sincos_pos_embed(
-            self.pos_embed.shape[-1], int(self.num_patches**0.5)
-        )
+        if self.dimensionality == 2:
+            pos_embed = get_2d_sincos_pos_embed(
+                self.pos_embed.shape[-1], int(self.num_patches**0.5)
+            )
+        elif self.dimensionality == 1:
+            pos_embed = get_1d_sincos_pos_embed_from_grid(
+                self.pos_embed.shape[-1], torch.arange(self.num_patches)
+            )
+        else:
+            raise ValueError("dimensionality must be 1 or 2")
         self.pos_embed.data.copy_(pos_embed.float().unsqueeze(0))
 
         # Zero-out adaLN modulation layers in DiT blocks:
@@ -157,19 +168,14 @@ class DiT(nn.Module):
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
             nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
 
-
     def forward(self, x, t):
         """
         Forward pass of DiT.
-        x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
-        t: (N,) tensor of diffusion timesteps
-        y: (N,) tensor of class labels
+        x: (N, nb_seq, hidden_dim) tensor of spatial inputs (images or latent representations of images)
+        t: (N, hidden_dim) tensor of diffusion timesteps
         """
-        x = (
-            x + self.pos_embed
-        )
+        x = x + self.pos_embed
 
         for block in self.blocks:
             x = block(x, t)  # (N, T, D)
         return x
-
