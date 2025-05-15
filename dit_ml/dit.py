@@ -171,9 +171,8 @@ class DiT(nn.Module):
     def forward(self, x, t):
         """
         Forward pass of DiT.
-        x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
-        t: (N,) tensor of diffusion timesteps
-        y: (N,) tensor of class labels
+        x: (N, nb_seq, hidden_dim) tensor of spatial inputs (images or latent representations of images)
+        t: (N, hidden_dim) tensor of diffusion timesteps
         """
         x = x + self.pos_embed
 
