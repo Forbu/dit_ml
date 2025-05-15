@@ -25,7 +25,7 @@ Here's a basic example of how to use `dit_ml`:
 from dit_ml.dit import DiT
 
 model = DiT(
-    input_size=input_size,
+    num_patches=input_size*input_size, # if 2d with flatten size
     in_channels=in_channels,
     hidden_size=hidden_size,
     depth=depth,
