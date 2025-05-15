@@ -26,7 +26,6 @@ from dit_ml.dit import DiT
 
 model = DiT(
     num_patches=input_size*input_size, # if 2d with flatten size
-    in_channels=in_channels,
     hidden_size=hidden_size,
     depth=depth,
     num_heads=num_heads,
