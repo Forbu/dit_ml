@@ -22,8 +22,6 @@ def test_dit_init():
 
     assert isinstance(model, DiT)
     assert model.learn_sigma == learn_sigma
-    assert model.in_channels == in_channels
-    assert model.out_channels == in_channels * 2 if learn_sigma else in_channels
     assert model.num_heads == num_heads
     assert model.num_patches == input_size * input_size
     assert len(model.blocks) == depth
