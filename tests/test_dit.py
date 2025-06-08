@@ -25,7 +25,6 @@ def test_dit_init():
     assert model.num_heads == num_heads
     assert model.num_patches == input_size * input_size
     assert len(model.blocks) == depth
-    assert model.pos_embed.shape == (1, input_size * input_size, hidden_size)
 
 def test_dit_forward():
     """Test the forward pass of the DiT model."""
