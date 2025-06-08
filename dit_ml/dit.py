@@ -1,11 +1,111 @@
+from typing import Final, Optional, Type
+
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 
-from timm.models.vision_transformer import Attention, Mlp
+from timm.models.vision_transformer import Mlp
 
 
 def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
+
+
+class Attention(nn.Module):
+    """Standard Multi-head Self Attention module with QKV projection.
+
+    This module implements the standard multi-head attention mechanism used in transformers.
+    It supports both the fused attention implementation (scaled_dot_product_attention) for
+    efficiency when available, and a manual implementation otherwise. The module includes
+    options for QK normalization, attention dropout, and projection dropout.
+    """
+
+    fused_attn: Final[bool]
+
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int = 8,
+        qkv_bias: bool = False,
+        qk_norm: bool = False,
+        scale_norm: bool = False,
+        proj_bias: bool = True,
+        attn_drop: float = 0.0,
+        proj_drop: float = 0.0,
+        norm_layer: Optional[Type[nn.Module]] = None,
+        causal_block=False, causal_block_size=32*32,
+    ) -> None:
+        """Initialize the Attention module.
+
+        Args:
+            dim: Input dimension of the token embeddings
+            num_heads: Number of attention heads
+            qkv_bias: Whether to use bias in the query, key, value projections
+            qk_norm: Whether to apply normalization to query and key vectors
+            proj_bias: Whether to use bias in the output projection
+            attn_drop: Dropout rate applied to the attention weights
+            proj_drop: Dropout rate applied after the output projection
+            norm_layer: Normalization layer constructor for QK normalization if enabled
+        """
+        super().__init__()
+        assert dim % num_heads == 0, "dim should be divisible by num_heads"
+        if qk_norm or scale_norm:
+            assert norm_layer is not None, (
+                "norm_layer must be provided if qk_norm or scale_norm is True"
+            )
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = self.head_dim**-0.5
+
+        self.causal_block = causal_block
+        self.causal_block_size = causal_block_size
+
+        if causal_block:
+            from torch.nn.attention.flex_attention import flex_attention, create_block_mask
+
+            def causal_mask(b, h, q_idx, kv_idx):
+                return q_idx + self.causal_block_size >= kv_idx
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.norm = norm_layer(dim) if scale_norm else nn.Identity()
+        self.proj = nn.Linear(dim, dim, bias=proj_bias)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        attn_mask: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        B, N, C = x.shape
+        qkv = (
+            self.qkv(x)
+            .reshape(B, N, 3, self.num_heads, self.head_dim)
+            .permute(2, 0, 3, 1, 4)
+        )
+        q, k, v = qkv.unbind(0)
+        q, k = self.q_norm(q), self.k_norm(k)
+
+        if not self.causal_block:
+            x = F.scaled_dot_product_attention(
+                q,
+                k,
+                v,
+                attn_mask=attn_mask,
+                dropout_p=self.attn_drop.p if self.training else 0.0,
+            )
+        else:
+            
+            block_mask = create_block_mask(causal_mask, B, self.num_heads, N, N, device=self.device)
+            x = flex_attention(q, k, v, block_mask=block_mask)
+
+        x = x.transpose(1, 2).reshape(B, N, C)
+        x = self.norm(x)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
 
 
 def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=0):
@@ -69,11 +169,11 @@ class DiTBlock(nn.Module):
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
 
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, **block_kwargs):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, causal_block=False, causal_block_size=32*32,**block_kwargs):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.attn = Attention(
-            hidden_size, num_heads=num_heads, qkv_bias=True, **block_kwargs
+            hidden_size, num_heads=num_heads, qkv_bias=True, causal_block=False, causal_block_size=32*32, **block_kwargs
         )
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
@@ -119,22 +219,28 @@ class DiT(nn.Module):
         num_heads=16,
         mlp_ratio=4.0,
         learn_sigma=True,
-        dimensionality=2,
+        causal_block=False,
+        causal_block_size=32 * 32,
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
         self.num_heads = num_heads
         self.num_patches = num_patches
-        self.dimensionality = dimensionality
+        self.causal_block_size = causal_block_size
 
-        # Will use fixed sin-cos embedding:
-        self.pos_embed = nn.Parameter(
-            torch.zeros(1, self.num_patches, hidden_size), requires_grad=False
-        )
+        # check if the causal block divide the num_patches
+        if causal_block and num_patches % causal_block_size != 0:
+            raise ("causal_block_size doesn't divide num_patches")
 
         self.blocks = nn.ModuleList(
             [
-                DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio)
+                DiTBlock(
+                    hidden_size,
+                    num_heads,
+                    mlp_ratio=mlp_ratio,
+                    causal_block=False,
+                    causal_block_size=32 * 32,
+                )
                 for _ in range(depth)
             ]
         )
@@ -150,19 +256,6 @@ class DiT(nn.Module):
 
         self.apply(_basic_init)
 
-        # Initialize (and freeze) pos_embed by sin-cos embedding:
-        if self.dimensionality == 2:
-            pos_embed = get_2d_sincos_pos_embed(
-                self.pos_embed.shape[-1], int(self.num_patches**0.5)
-            )
-        elif self.dimensionality == 1:
-            pos_embed = get_1d_sincos_pos_embed_from_grid(
-                self.pos_embed.shape[-1], torch.arange(self.num_patches)
-            )
-        else:
-            raise ValueError("dimensionality must be 1 or 2")
-        self.pos_embed.data.copy_(pos_embed.float().unsqueeze(0))
-
         # Zero-out adaLN modulation layers in DiT blocks:
         for block in self.blocks:
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
@@ -174,7 +267,6 @@ class DiT(nn.Module):
         x: (N, nb_seq, hidden_dim) tensor of spatial inputs (images or latent representations of images)
         t: (N, hidden_dim) tensor of diffusion timesteps
         """
-        x = x + self.pos_embed
 
         for block in self.blocks:
             x = block(x, t)  # (N, T, D)
