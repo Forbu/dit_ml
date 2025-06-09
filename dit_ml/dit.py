@@ -226,6 +226,7 @@ class DiT(nn.Module):
         self.learn_sigma = learn_sigma
         self.num_heads = num_heads
         self.num_patches = num_patches
+        self.causal_block = causal_block
         self.causal_block_size = causal_block_size
 
         # check if the causal block divide the num_patches

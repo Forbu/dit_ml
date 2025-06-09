@@ -69,3 +69,43 @@ def test_dit_forward():
     # Expected output shape is (N, T, D)
     expected_output_shape = (batch_size, input_size * input_size, hidden_size)
     assert output.shape == expected_output_shape
+
+
+def test_dit_causal_block_init():
+    """Test the initialization of the DiT model with causal_block enabled."""
+    input_size = 8
+    hidden_size = 16
+    depth = 2
+    num_heads = 4
+    learn_sigma = True
+    causal_block = True
+    causal_block_size = input_size * input_size
+
+    model = DiT(
+        num_patches=input_size * input_size,
+        hidden_size=hidden_size,
+        depth=depth,
+        num_heads=num_heads,
+        learn_sigma=learn_sigma,
+        causal_block=causal_block,
+        causal_block_size=causal_block_size,
+    )
+
+    assert isinstance(model, DiT)
+    assert model.causal_block is causal_block
+    assert model.causal_block_size == causal_block_size
+    assert len(model.blocks) == depth
+
+
+def test_dit_causal_block_invalid_size():
+    """Test initializing DiT with an invalid causal_block_size raises an error."""
+    with pytest.raises(Exception):
+        DiT(
+            num_patches=10,
+            hidden_size=16,
+            depth=1,
+            num_heads=2,
+            learn_sigma=False,
+            causal_block=True,
+            causal_block_size=4,
+        )
