@@ -251,7 +251,7 @@ class DiT(nn.Module):
 
         # check if the causal block divide the num_patches
         if causal_block and num_patches % causal_block_size != 0:
-            assert ValueError("causal_block_size must divide num_patches")
+            raise ValueError("causal_block_size must divide num_patches")
 
         self.blocks = nn.ModuleList(
             [
