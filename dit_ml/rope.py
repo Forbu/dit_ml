@@ -263,7 +263,7 @@ def _apply_rotary_emb_mixed_3d(
     x_ = x.float().reshape(*x.shape[:-1], -1, 2)
     x_ = torch.view_as_complex(x_)  # (b, nb_seq, d_feat // 2)
 
-    x_ = einops.rearrange(x_, "b (h w t) d -> b h w t d", h=h, w=w, t=d)
+    x_ = einops.rearrange(x_, "b (t h w) d -> b h w t d", h=h, w=w, t=d)
 
     freqs_cis_h_ = (
         freqs_cis_h.unsqueeze(0).unsqueeze(2).unsqueeze(2)
@@ -339,7 +339,7 @@ def compute_mixed_rope_embeddings(
             qok_flat, freqs_h, freqs_w, freqs_d, h, w, d
         )
 
-        result_flat = einops.rearrange(result_flat, "b h w t d -> b (h w t) d")
+        result_flat = einops.rearrange(result_flat, "b h w t d -> b (t h w) d")
 
     else:
         raise ValueError(f"Unsupported dimensions: {dimensions}")

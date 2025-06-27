@@ -349,8 +349,6 @@ class DiT(nn.Module):
         Forward pass of DiT.
         x: (N, nb_seq, hidden_dim) tensor of spatial inputs (images or latent representations of images)
         t: (N, hidden_dim) tensor of diffusion timesteps
-        h: (int) height of the input
-        w: (int) width of the input
         """
 
         for block in self.blocks:
