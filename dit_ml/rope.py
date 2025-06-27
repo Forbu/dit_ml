@@ -99,7 +99,7 @@ def init_rope_frequencies(
         )
 
 
-def compute_rope_embeddings(
+def compute_axial_rope_embeddings(
     frequencies: Union[torch.Tensor, tuple[torch.Tensor, ...]],
     dimensions: int,
     query_or_key: torch.Tensor,
@@ -113,7 +113,7 @@ def compute_rope_embeddings(
     Args:
         frequencies (Union[torch.Tensor, tuple[torch.Tensor, ...]]): The frequency tensor(s) for the RoPe embeddings.
         dimensions (int): The number of dimensions for the query or key (1, 2 or 3).
-        query_or_key (torch.Tensor): The input tensor (query or key) (is of size (batch_size, num_heads, seq_len, head_dim).)
+        query_or_key (torch.Tensor): The input tensor (query or key). Expected shape is (batch_size, num_heads, seq_len, head_dim).
         h (int, optional): The height of the input for 2D/3D RoPE. Defaults to None.
         w (int, optional): The width of the input for 2D/3D RoPE. Defaults to None.
         d (int, optional): The depth of the input for 3D RoPE. Defaults to None.
@@ -121,28 +121,69 @@ def compute_rope_embeddings(
     Returns:
         torch.Tensor: The tensor with RoPE embeddings applied.
     """
-    b, h, s, d = query_or_key.shape
-    query_or_key = query_or_key.view(
-        b * h, s, d
-    )  # Flatten batch and head dimensions for easier processing
+    # The original snippet had a confusing reshape. We work directly on the standard 4D tensor.
+    orig_shape = query_or_key.shape
+    B, N, S, D = orig_shape
 
     if dimensions == 1:
-        freqs_cis = frequencies[: query_or_key.shape[1]]
-        result = _apply_rotary_emb(query_or_key, freqs_cis)
+        # Flatten batch and head dims for easier processing, then un-flatten
+        qok_flat = query_or_key.view(B * N, S, D)
+        freqs_cis = frequencies[:S]
+        result_flat = _apply_rotary_emb(qok_flat, freqs_cis)
+        return result_flat.view(orig_shape)
+
     elif dimensions == 2:
         assert h is not None and w is not None, "h and w must be provided for 2D RoPE"
-        freqs_cis_h, freqs_cis_w = frequencies
-        dim = query_or_key.shape[-1]
-        return None
+        assert S == h * w, "Sequence length S must equal h * w"
+        assert D % 2 == 0, "Head dimension D must be even for 2D RoPE"
+
+        # Split the head dimension for axial application
+        d_part = D // 2
+        qok_h, qok_w = query_or_key.split(d_part, dim=-1)
+
+        # Get precomputed frequencies
+        freqs_h, freqs_w = frequencies
+
+        # Apply RoPE to height dimension
+        qok_h = einops.rearrange(qok_h, 'b n (h w) d -> (b n w) h d', h=h, w=w)
+        rotated_h = _apply_rotary_emb(qok_h, freqs_h)
+        rotated_h = einops.rearrange(rotated_h, '(b n w) h d -> b n (h w) d', b=B, n=N, h=h, w=w)
+
+        # Apply RoPE to width dimension
+        qok_w = einops.rearrange(qok_w, 'b n (h w) d -> (b n h) w d', h=h, w=w)
+        rotated_w = _apply_rotary_emb(qok_w, freqs_w)
+        rotated_w = einops.rearrange(rotated_w, '(b n h) w d -> b n (h w) d', b=B, n=N, h=h, w=w)
+
+        return torch.cat([rotated_h, rotated_w], dim=-1)
+
     elif dimensions == 3:
-        assert h is not None and w is not None and d is not None, (
-            "h, w and d must be provided for 3D RoPE"
-        )
-        freqs_cis_h, freqs_cis_w, freqs_cis_d = frequencies
-        dim = query_or_key.shape[-1]
-        return None
+        assert h is not None and w is not None and d is not None, "h, w, and d must be provided for 3D RoPE"
+        assert S == h * w * d, "Sequence length S must equal h * w * d"
+        assert D % 6 == 0, "Head dimension D must be divisible by 6 for 3D RoPE"
+
+        # Split the head dimension for axial application
+        d_part = D // 3
+        qok_h, qok_w, qok_d = query_or_key.split(d_part, dim=-1)
+
+        # Get precomputed frequencies
+        freqs_h, freqs_w, freqs_d = frequencies
+
+        # Apply RoPE to height dimension
+        qok_h = einops.rearrange(qok_h, 'b n (h w d) dim -> (b n w d) h dim', h=h, w=w, d=d)
+        rotated_h = _apply_rotary_emb(qok_h, freqs_h)
+        rotated_h = einops.rearrange(rotated_h, '(b n w d) h dim -> b n (h w d) dim', b=B, n=N, h=h, w=w, d=d)
+
+        # Apply RoPE to width dimension
+        qok_w = einops.rearrange(qok_w, 'b n (h w d) dim -> (b n h d) w dim', h=h, w=w, d=d)
+        rotated_w = _apply_rotary_emb(qok_w, freqs_w)
+        rotated_w = einops.rearrange(rotated_w, '(b n h d) w dim -> b n (h w d) dim', b=B, n=N, h=h, w=w, d=d)
+
+        # Apply RoPE to depth dimension
+        qok_d = einops.rearrange(qok_d, 'b n (h w d) dim -> (b n h w) d dim', h=h, w=w, d=d)
+        rotated_d = _apply_rotary_emb(qok_d, freqs_d)
+        rotated_d = einops.rearrange(rotated_d, '(b n h w) d dim -> b n (h w d) dim', b=B, n=N, h=h, w=w, d=d)
+
+        return torch.cat([rotated_h, rotated_w, rotated_d], dim=-1)
+
     else:
         raise ValueError(f"Unsupported dimensions: {dimensions}")
-
-    result = result.view(b, h, s, d)  # Reshape back to original dimensions
-    return result

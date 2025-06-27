@@ -1,5 +1,5 @@
 import torch
-from dit_ml.rope import init_rope_frequencies, compute_rope_embeddings
+from dit_ml.rope import init_rope_frequencies, compute_axial_rope_embeddings
 
 
 def test_rope_1d():
@@ -16,7 +16,7 @@ def test_rope_1d():
     dummy_tensor = torch.randn(batch_size, nb_heads, seq_len, embedding_dim)
 
     # Compute RoPE embeddings
-    rope_tensor = compute_rope_embeddings(freqs, 1, dummy_tensor)
+    rope_tensor = compute_axial_rope_embeddings(freqs, 1, dummy_tensor)
 
     # Check output shape
     assert rope_tensor.shape == dummy_tensor.shape

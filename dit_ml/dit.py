@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from timm.models.vision_transformer import Mlp
-from dit_ml.rope import init_rope_frequencies, compute_rope_embeddings
+from dit_ml.rope import init_rope_frequencies, compute_axial_rope_embeddings
 
 
 def modulate(x, shift, scale):
@@ -117,10 +117,10 @@ class Attention(nn.Module):
 
         if self.use_rope:
 
-            q = compute_rope_embeddings(
+            q = compute_axial_rope_embeddings(
                 self.rope_frequencies, self.rope_dimension, q, h=h, w=w
             )
-            k = compute_rope_embeddings(
+            k = compute_axial_rope_embeddings(
                 self.rope_frequencies, self.rope_dimension, k, h=h, w=w
             )
 
