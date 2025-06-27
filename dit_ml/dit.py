@@ -74,9 +74,7 @@ class Attention(nn.Module):
         self.causal_block_size = causal_block_size
 
         if self.use_rope:
-            (
-                self.rope_frequencies
-            ) = init_rope_frequencies(
+            self.rope_frequencies = init_rope_frequencies(
                 self.head_dim,
                 self.rope_dimension,
                 max_height=max_h,
