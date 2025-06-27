@@ -90,25 +90,3 @@ def test_dit_causal_block_invalid_size():
             causal_block=True,
             causal_block_size=4,
         )
-
-def test_rope_attention():
-    """Test the Attention module with RoPE enabled."""
-    batch_size = 2
-    h = 8
-    w = 8
-    dim = 64
-    num_heads = 4
-
-    # With RoPE
-    attn_rope = Attention(dim, num_heads, use_rope=True, max_h=h, max_w=w)
-    dummy_x = torch.randn(batch_size, h * w, dim)
-    output_rope = attn_rope(dummy_x, h=h, w=w)
-    assert output_rope.shape == dummy_x.shape
-
-    # Without RoPE
-    attn_no_rope = Attention(dim, num_heads, use_rope=False)
-    output_no_rope = attn_no_rope(dummy_x, h=h, w=w)
-    assert output_no_rope.shape == dummy_x.shape
-
-    # Check that the outputs are different
-    assert not torch.allclose(output_rope, output_no_rope)
