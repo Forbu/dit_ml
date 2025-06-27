@@ -115,7 +115,7 @@ def test_dit_causal_block_rope_init():
 
 def test_dit_causal_block_invalid_size():
     """Test initializing DiT with an invalid causal_block_size raises an error."""
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         DiT(
             num_patches=10,
             hidden_size=16,
