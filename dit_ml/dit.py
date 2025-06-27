@@ -94,6 +94,8 @@ class Attention(nn.Module):
         def causal_mask(b, h, q_idx, kv_idx):
             return q_idx + self.causal_block_size >= kv_idx
 
+        self.causal_mask_fn = causal_mask
+
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -136,7 +138,7 @@ class Attention(nn.Module):
 
         if self.causal_block:
             block_mask = create_block_mask(
-                causal_mask, B, self.num_heads, N, N, device=self.device
+                self.causal_mask_fn, B, self.num_heads, N, N, device=self.device
             )
             x = flex_attention(q, k, v, block_mask=block_mask)
         else:
