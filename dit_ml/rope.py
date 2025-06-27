@@ -310,13 +310,12 @@ def compute_mixed_rope_embeddings(
     orig_shape = query_or_key.shape
     B, N, S, D = orig_shape
 
-    qok_flat = query_or_key.view(B * N, S, D)
+    qok_flat = einops.rearrange(query_or_key, "b h s d -> (b h) s d")
 
     if dimensions == 1:
         # Flatten batch and head dims for easier processing, then un-flatten
         freqs_cis = frequencies[:S]
         result_flat = _apply_rotary_emb(qok_flat, freqs_cis)
-        return result_flat.view(orig_shape)
 
     elif dimensions == 2:
         assert h is not None and w is not None, "h and w must be provided for 2D RoPE"
@@ -327,8 +326,6 @@ def compute_mixed_rope_embeddings(
 
         result_flat = _apply_rotary_emb_mixed_2d(qok_flat, freqs_h, freqs_w, h, w)
         result_flat = einops.rearrange(result_flat, "b h w d -> b (h w) d")
-
-        return result_flat.view(orig_shape)
 
     elif dimensions == 3:
         assert h is not None and w is not None and d is not None, (
@@ -344,7 +341,7 @@ def compute_mixed_rope_embeddings(
 
         result_flat = einops.rearrange(result_flat, "b h w t d -> b (h w t) d")
 
-        return result_flat.view(orig_shape)
-
     else:
         raise ValueError(f"Unsupported dimensions: {dimensions}")
+
+    return einops.rearrange(result_flat, "(b h) s d -> b h s d", b=B, h=N)
