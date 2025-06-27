@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from timm.models.vision_transformer import Mlp
-from dit_ml.rope import init_rope_frequencies, compute_axial_rope_embeddings
+from dit_ml.rope import init_rope_frequencies, compute_mixed_rope_embeddings
 
 
 def modulate(x, shift, scale):
@@ -37,7 +37,7 @@ class Attention(nn.Module):
         causal_block=False,
         causal_block_size=32 * 32,
         use_rope: bool = False,
-        rope_dimension: int = 2,
+        rope_dimension: int = 3,
         max_h: int = 32,
         max_w: int = 32,
         max_d: int = 6,
@@ -74,7 +74,9 @@ class Attention(nn.Module):
         self.causal_block_size = causal_block_size
 
         if self.use_rope:
-            self.rope_frequencies = init_rope_frequencies(
+            (
+                self.rope_frequencies
+            ) = init_rope_frequencies(
                 self.head_dim,
                 self.rope_dimension,
                 max_height=max_h,
@@ -105,6 +107,7 @@ class Attention(nn.Module):
         attn_mask: Optional[torch.Tensor] = None,
         h: Optional[int] = None,
         w: Optional[int] = None,
+        d: Optional[int] = None,
     ) -> torch.Tensor:
         B, N, C = x.shape
         qkv = (
@@ -116,12 +119,21 @@ class Attention(nn.Module):
         q, k = self.q_norm(q), self.k_norm(k)
 
         if self.use_rope:
-
-            q = compute_axial_rope_embeddings(
-                self.rope_frequencies, self.rope_dimension, q, h=h, w=w
+            q = compute_mixed_rope_embeddings(
+                self.rope_frequencies
+                self.rope_dimension,
+                q,
+                h=h,
+                w=w,
+                d=d,
             )
-            k = compute_axial_rope_embeddings(
-                self.rope_frequencies, self.rope_dimension, k, h=h, w=w
+            k = compute_mixed_rope_embeddings(
+                self.rope_frequencies
+                self.rope_dimension,
+                k,
+                h=h,
+                w=w,
+                d=d,
             )
 
         if not self.causal_block:
