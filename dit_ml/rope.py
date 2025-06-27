@@ -12,6 +12,7 @@ https://arxiv.org/pdf/2403.13298 (2D mixed rope)
 import torch
 from typing import Union
 
+
 def _precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
     """
     Precomputes the frequency tensor for RoPE embeddings.
@@ -22,16 +23,20 @@ def _precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.T
     freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
     return freqs_cis
 
+
 def _reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     """
     Reshapes the frequency tensor to be broadcastable with the input tensor.
     """
     ndim = x.ndim
     assert 0 <= 1 < ndim
-    assert freqs_cis.shape == (x.shape[1], x.shape[-1] // 2), f"freqs_cis.shape={freqs_cis.shape}, x.shape={x.shape}"
+    assert freqs_cis.shape == (x.shape[1], x.shape[-1] // 2), (
+        f"freqs_cis.shape={freqs_cis.shape}, x.shape={x.shape}"
+    )
     shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
     shape[-1] = shape[-1] // 2
     return freqs_cis.view(*shape)
+
 
 def _apply_rotary_emb(x: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
     """
@@ -44,6 +49,7 @@ def _apply_rotary_emb(x: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tensor:
     x_out = torch.view_as_real(x_out)
     x_out = x_out.flatten(2)
     return x_out.type_as(x)
+
 
 def init_rope_frequencies(
     embedding_dim: int,
@@ -71,20 +77,27 @@ def init_rope_frequencies(
         assert max_seq_len is not None, "max_seq_len must be provided for 1D RoPE"
         return _precompute_freqs_cis(embedding_dim, max_seq_len)
     elif dimensions == 2:
-        assert max_height is not None and max_width is not None, "max_height and max_width must be provided for 2D RoPE"
+        assert max_height is not None and max_width is not None, (
+            "max_height and max_width must be provided for 2D RoPE"
+        )
         d_half = embedding_dim // 2
         freqs_h = _precompute_freqs_cis(d_half, max_height)
         freqs_w = _precompute_freqs_cis(d_half, max_width)
         return freqs_h, freqs_w
     elif dimensions == 3:
-        assert max_height is not None and max_width is not None and max_depth is not None, "max_height, max_width and max_depth must be provided for 3D RoPE"
+        assert (
+            max_height is not None and max_width is not None and max_depth is not None
+        ), "max_height, max_width and max_depth must be provided for 3D RoPE"
         d_third = embedding_dim // 3
         freqs_h = _precompute_freqs_cis(d_third, max_height)
         freqs_w = _precompute_freqs_cis(d_third, max_width)
         freqs_d = _precompute_freqs_cis(d_third, max_depth)
         return freqs_h, freqs_w, freqs_d
     else:
-        raise NotImplementedError(f"RoPE for {dimensions} dimensions not implemented yet")
+        raise NotImplementedError(
+            f"RoPE for {dimensions} dimensions not implemented yet"
+        )
+
 
 def compute_rope_embeddings(
     frequencies: Union[torch.Tensor, tuple[torch.Tensor, ...]],
@@ -119,8 +132,18 @@ def compute_rope_embeddings(
         x_h = query_or_key[..., :d_half]
         x_w = query_or_key[..., d_half:]
 
-        coords_h = torch.arange(h, device=query_or_key.device, dtype=torch.long).view(h, 1).expand(h, w).reshape(h * w)
-        coords_w = torch.arange(w, device=query_or_key.device, dtype=torch.long).view(1, w).expand(h, w).reshape(h * w)
+        coords_h = (
+            torch.arange(h, device=query_or_key.device, dtype=torch.long)
+            .view(h, 1)
+            .expand(h, w)
+            .reshape(h * w)
+        )
+        coords_w = (
+            torch.arange(w, device=query_or_key.device, dtype=torch.long)
+            .view(1, w)
+            .expand(h, w)
+            .reshape(h * w)
+        )
 
         gathered_freqs_h = freqs_cis_h[coords_h]
         gathered_freqs_w = freqs_cis_w[coords_w]
@@ -130,17 +153,34 @@ def compute_rope_embeddings(
 
         return torch.cat([x_h_out, x_w_out], dim=-1)
     elif dimensions == 3:
-        assert h is not None and w is not None and d is not None, "h, w and d must be provided for 3D RoPE"
+        assert h is not None and w is not None and d is not None, (
+            "h, w and d must be provided for 3D RoPE"
+        )
         freqs_cis_h, freqs_cis_w, freqs_cis_d = frequencies
         dim = query_or_key.shape[-1]
         d_third = dim // 3
         x_h = query_or_key[..., :d_third]
-        x_w = query_or_key[..., d_third:2*d_third]
-        x_d = query_or_key[..., 2*d_third:]
+        x_w = query_or_key[..., d_third : 2 * d_third]
+        x_d = query_or_key[..., 2 * d_third :]
 
-        coords_h = torch.arange(h, device=query_or_key.device, dtype=torch.long).view(h, 1, 1).expand(h, w, d).reshape(h * w * d)
-        coords_w = torch.arange(w, device=query_or_key.device, dtype=torch.long).view(1, w, 1).expand(h, w, d).reshape(h * w * d)
-        coords_d = torch.arange(d, device=query_or_key.device, dtype=torch.long).view(1, 1, d).expand(h, w, d).reshape(h * w * d)
+        coords_h = (
+            torch.arange(h, device=query_or_key.device, dtype=torch.long)
+            .view(h, 1, 1)
+            .expand(h, w, d)
+            .reshape(h * w * d)
+        )
+        coords_w = (
+            torch.arange(w, device=query_or_key.device, dtype=torch.long)
+            .view(1, w, 1)
+            .expand(h, w, d)
+            .reshape(h * w * d)
+        )
+        coords_d = (
+            torch.arange(d, device=query_or_key.device, dtype=torch.long)
+            .view(1, 1, d)
+            .expand(h, w, d)
+            .reshape(h * w * d)
+        )
 
         gathered_freqs_h = freqs_cis_h[coords_h]
         gathered_freqs_w = freqs_cis_w[coords_w]
