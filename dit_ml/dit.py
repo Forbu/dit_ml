@@ -35,7 +35,7 @@ class Attention(nn.Module):
         proj_drop: float = 0.0,
         norm_layer: Optional[Type[nn.Module]] = None,
         causal_block=False,
-        causal_block_size=32*32,
+        causal_block_size=32 * 32,
         use_rope: bool = False,
         rope_dimension: int = 2,
         max_h: int = 32,
@@ -81,7 +81,10 @@ class Attention(nn.Module):
             )
 
         if causal_block:
-            from torch.nn.attention.flex_attention import flex_attention, create_block_mask
+            from torch.nn.attention.flex_attention import (
+                flex_attention,
+                create_block_mask,
+            )
 
             def causal_mask(b, h, q_idx, kv_idx):
                 return q_idx + self.causal_block_size >= kv_idx
@@ -117,8 +120,12 @@ class Attention(nn.Module):
             q = q.permute(0, 2, 1, 3).reshape(q_b, q_n, q_h * q_d)
             k = k.permute(0, 2, 1, 3).reshape(k_b, k_n, k_h * k_d)
 
-            q = compute_rope_embeddings(self.rope_frequencies, self.rope_dimension, q, h=h, w=w)
-            k = compute_rope_embeddings(self.rope_frequencies, self.rope_dimension, k, h=h, w=w)
+            q = compute_rope_embeddings(
+                self.rope_frequencies, self.rope_dimension, q, h=h, w=w
+            )
+            k = compute_rope_embeddings(
+                self.rope_frequencies, self.rope_dimension, k, h=h, w=w
+            )
 
             q = q.reshape(q_b, q_n, q_h, q_d).permute(0, 2, 1, 3)
             k = k.reshape(k_b, k_n, k_h, k_d).permute(0, 2, 1, 3)
@@ -132,8 +139,9 @@ class Attention(nn.Module):
                 dropout_p=self.attn_drop.p if self.training else 0.0,
             )
         else:
-            
-            block_mask = create_block_mask(causal_mask, B, self.num_heads, N, N, device=self.device)
+            block_mask = create_block_mask(
+                causal_mask, B, self.num_heads, N, N, device=self.device
+            )
             x = flex_attention(q, k, v, block_mask=block_mask)
 
         x = x.transpose(1, 2).reshape(B, N, C)
@@ -204,11 +212,32 @@ class DiTBlock(nn.Module):
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
 
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, causal_block=False, causal_block_size=32*32, use_rope=False, rope_dimension=2, max_h=32, max_w=32, **block_kwargs):
+    def __init__(
+        self,
+        hidden_size,
+        num_heads,
+        mlp_ratio=4.0,
+        causal_block=False,
+        causal_block_size=32 * 32,
+        use_rope=False,
+        rope_dimension=2,
+        max_h=32,
+        max_w=32,
+        **block_kwargs,
+    ):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.attn = Attention(
-            hidden_size, num_heads=num_heads, qkv_bias=True, causal_block=False, causal_block_size=32*32, use_rope=use_rope, rope_dimension=rope_dimension, max_h=max_h, max_w=max_w, **block_kwargs
+            hidden_size,
+            num_heads=num_heads,
+            qkv_bias=True,
+            causal_block=causal_block,
+            causal_block_size=causal_block_size,
+            use_rope=use_rope,
+            rope_dimension=rope_dimension,
+            max_h=max_h,
+            max_w=max_w,
+            **block_kwargs,
         )
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
@@ -233,9 +262,7 @@ class DiTBlock(nn.Module):
             gate_mlp,
         ) = self.adaLN_modulation(c).chunk(6, dim=1)
         x = x + gate_msa.unsqueeze(1) * self.attn(
-            modulate(self.norm1(x), shift_msa, scale_msa),
-            h=h,
-            w=w
+            modulate(self.norm1(x), shift_msa, scale_msa), h=h, w=w
         )
         x = x + gate_mlp.unsqueeze(1) * self.mlp(
             modulate(self.norm2(x), shift_mlp, scale_mlp)
