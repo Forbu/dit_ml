@@ -275,7 +275,7 @@ def _apply_rotary_emb_mixed_3d(
         freqs_cis_d.unsqueeze(0).unsqueeze(1).unsqueeze(2)
     )  # shape (1, 1, 1, d, d_feat // 2)
 
-    x_out = x_ * freqs_cis_h_ * freqs_cis_w_ * freqs_cis_d_
+    x_out = x_ * freqs_cis_h_.to(x_.device) * freqs_cis_w_.to(x_.device) * freqs_cis_d_.to(x_.device)
 
     x_out = torch.view_as_real(x_out)
     x_out = x_out.flatten(4)
