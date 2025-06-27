@@ -40,6 +40,7 @@ class Attention(nn.Module):
         rope_dimension: int = 2,
         max_h: int = 32,
         max_w: int = 32,
+        max_d: int = 6,
     ) -> None:
         """Initialize the Attention module.
 
@@ -74,10 +75,11 @@ class Attention(nn.Module):
 
         if self.use_rope:
             self.rope_frequencies = init_rope_frequencies(
-                self.head_dim * self.num_heads,
+                self.head_dim,
                 self.rope_dimension,
                 max_height=max_h,
                 max_width=max_w,
+                max_depth=max_d,
             )
 
         if causal_block:
@@ -114,11 +116,6 @@ class Attention(nn.Module):
         q, k = self.q_norm(q), self.k_norm(k)
 
         if self.use_rope:
-            q_b, q_h, q_n, q_d = q.shape
-            k_b, k_h, k_n, k_d = k.shape
-
-            q = q.permute(0, 2, 1, 3).reshape(q_b, q_n, q_h * q_d)
-            k = k.permute(0, 2, 1, 3).reshape(k_b, k_n, k_h * k_d)
 
             q = compute_rope_embeddings(
                 self.rope_frequencies, self.rope_dimension, q, h=h, w=w
@@ -126,9 +123,6 @@ class Attention(nn.Module):
             k = compute_rope_embeddings(
                 self.rope_frequencies, self.rope_dimension, k, h=h, w=w
             )
-
-            q = q.reshape(q_b, q_n, q_h, q_d).permute(0, 2, 1, 3)
-            k = k.reshape(k_b, k_n, k_h, k_d).permute(0, 2, 1, 3)
 
         if not self.causal_block:
             x = F.scaled_dot_product_attention(
@@ -223,6 +217,7 @@ class DiTBlock(nn.Module):
         rope_dimension=2,
         max_h=32,
         max_w=32,
+        max_d=6,
         **block_kwargs,
     ):
         super().__init__()
@@ -237,6 +232,7 @@ class DiTBlock(nn.Module):
             rope_dimension=rope_dimension,
             max_h=max_h,
             max_w=max_w,
+            max_d=max_d,
             **block_kwargs,
         )
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
@@ -289,6 +285,7 @@ class DiT(nn.Module):
         rope_dimension=2,
         max_h=32,
         max_w=32,
+        max_d=6,
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
@@ -314,6 +311,7 @@ class DiT(nn.Module):
                     rope_dimension=rope_dimension,
                     max_h=max_h,
                     max_w=max_w,
+                    max_d=max_d,
                 )
                 for _ in range(depth)
             ]

@@ -4,12 +4,13 @@ Module to manage RoPe embeddings
 For 1D data :
 https://arxiv.org/pdf/2104.09864 (classic rope)
 
-For 2D data :
-https://arxiv.org/pdf/2403.13298 (2D mixed rope)
+For 2D data and other :
+https://arxiv.org/pdf/2403.13298 (RoPE-Mixed)
 
 """
 
 import torch
+import einops
 from typing import Union
 
 
@@ -80,17 +81,17 @@ def init_rope_frequencies(
         assert max_height is not None and max_width is not None, (
             "max_height and max_width must be provided for 2D RoPE"
         )
-        freqs_h = _precompute_freqs_cis(embedding_dim, max_height)
-        freqs_w = _precompute_freqs_cis(embedding_dim, max_width)
+        freqs_h = _precompute_freqs_cis(embedding_dim, max_height, theta=100.0)
+        freqs_w = _precompute_freqs_cis(embedding_dim, max_width, theta=100.0)
         return freqs_h, freqs_w
     elif dimensions == 3:
         assert (
             max_height is not None and max_width is not None and max_depth is not None
         ), "max_height, max_width and max_depth must be provided for 3D RoPE"
 
-        freqs_h = _precompute_freqs_cis(embedding_dim, max_height)
-        freqs_w = _precompute_freqs_cis(embedding_dim, max_width)
-        freqs_d = _precompute_freqs_cis(embedding_dim, max_depth)
+        freqs_h = _precompute_freqs_cis(embedding_dim, max_height, theta=100.0)
+        freqs_w = _precompute_freqs_cis(embedding_dim, max_width, theta=100.0)
+        freqs_d = _precompute_freqs_cis(embedding_dim, max_depth, theta=100.0)
         return freqs_h, freqs_w, freqs_d
     else:
         raise NotImplementedError(
@@ -112,7 +113,7 @@ def compute_rope_embeddings(
     Args:
         frequencies (Union[torch.Tensor, tuple[torch.Tensor, ...]]): The frequency tensor(s) for the RoPe embeddings.
         dimensions (int): The number of dimensions for the query or key (1, 2 or 3).
-        query_or_key (torch.Tensor): The input tensor (query or key)
+        query_or_key (torch.Tensor): The input tensor (query or key) (is of size (batch_size, num_heads, seq_len, head_dim).)
         h (int, optional): The height of the input for 2D/3D RoPE. Defaults to None.
         w (int, optional): The width of the input for 2D/3D RoPE. Defaults to None.
         d (int, optional): The depth of the input for 3D RoPE. Defaults to None.
@@ -120,9 +121,14 @@ def compute_rope_embeddings(
     Returns:
         torch.Tensor: The tensor with RoPE embeddings applied.
     """
+    b, h, s, d = query_or_key.shape
+    query_or_key = query_or_key.view(
+        b * h, s, d
+    )  # Flatten batch and head dimensions for easier processing
+
     if dimensions == 1:
         freqs_cis = frequencies[: query_or_key.shape[1]]
-        return _apply_rotary_emb(query_or_key, freqs_cis)
+        result = _apply_rotary_emb(query_or_key, freqs_cis)
     elif dimensions == 2:
         assert h is not None and w is not None, "h and w must be provided for 2D RoPE"
         freqs_cis_h, freqs_cis_w = frequencies
@@ -137,3 +143,6 @@ def compute_rope_embeddings(
         return None
     else:
         raise ValueError(f"Unsupported dimensions: {dimensions}")
+
+    result = result.view(b, h, s, d)  # Reshape back to original dimensions
+    return result
