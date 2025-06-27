@@ -138,7 +138,7 @@ class Attention(nn.Module):
 
         if self.causal_block:
             block_mask = create_block_mask(
-                self.causal_mask_fn, B, self.num_heads, N, N, device=self.device
+                self.causal_mask_fn, B, self.num_heads, N, N, device=q.device
             )
             x = flex_attention(q, k, v, block_mask=block_mask)
         else:
