@@ -80,7 +80,7 @@ def test_dit_causal_block_init():
 
 def test_dit_causal_block_rope_init():
     """Test the initialization of the DiT model with causal_block enabled."""
-    input_size = 8
+    batch_size = 2
     h = 4
     w = 4
     d = 2
@@ -111,6 +111,10 @@ def test_dit_causal_block_rope_init():
     assert model.causal_block_size == causal_block_size
     assert len(model.blocks) == depth
 
+    dummy_x = torch.randn(batch_size, h * w * d, hidden_size)
+    dummy_c = torch.randn(batch_size, hidden_size) # Dummy conditioning vector
+
+    output = model(dummy_x, dummy_c)
 
 
 def test_dit_causal_block_invalid_size():
