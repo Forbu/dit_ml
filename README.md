@@ -9,6 +9,8 @@
 
 The goal of dit_ml is to create a python repository to create the base model for diffusion transformer (https://arxiv.org/abs/2212.09748)
 
+Also we incorporate RoPe embedding (for equivariance) taking inspiration from https://arxiv.org/pdf/2104.09864, https://arxiv.org/pdf/2403.13298 (2D mixed rope) 
+
 ## Installation
 
 You can install `dit_ml` using pip:
