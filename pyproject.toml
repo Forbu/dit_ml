@@ -1,6 +1,6 @@
 [project]
 name = "dit-ml"
-version = "0.2.2"
+version = "0.2.3"
 description = "DiT (Diffusion Transformer)"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 from timm.models.vision_transformer import Mlp
+from dit_ml.rope import init_rope_frequencies, compute_rope_embeddings
 
 
 def modulate(x, shift, scale):
@@ -33,7 +34,12 @@ class Attention(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         norm_layer: Optional[Type[nn.Module]] = None,
-        causal_block=False, causal_block_size=32*32,
+        causal_block=False,
+        causal_block_size=32*32,
+        use_rope: bool = False,
+        rope_dimension: int = 2,
+        max_h: int = 32,
+        max_w: int = 32,
     ) -> None:
         """Initialize the Attention module.
 
@@ -46,6 +52,10 @@ class Attention(nn.Module):
             attn_drop: Dropout rate applied to the attention weights
             proj_drop: Dropout rate applied after the output projection
             norm_layer: Normalization layer constructor for QK normalization if enabled
+            use_rope: Whether to use rotary positional embeddings
+            rope_dimension: The dimension of the RoPE (1, 2 or 3)
+            max_h: The maximum height of the input for 2D RoPE
+            max_w: The maximum width of the input for 2D RoPE
         """
         super().__init__()
         assert dim % num_heads == 0, "dim should be divisible by num_heads"
@@ -56,9 +66,19 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim**-0.5
+        self.use_rope = use_rope
+        self.rope_dimension = rope_dimension
 
         self.causal_block = causal_block
         self.causal_block_size = causal_block_size
+
+        if self.use_rope:
+            self.rope_frequencies = init_rope_frequencies(
+                self.head_dim * self.num_heads,
+                self.rope_dimension,
+                max_height=max_h,
+                max_width=max_w,
+            )
 
         if causal_block:
             from torch.nn.attention.flex_attention import flex_attention, create_block_mask
@@ -78,6 +98,8 @@ class Attention(nn.Module):
         self,
         x: torch.Tensor,
         attn_mask: Optional[torch.Tensor] = None,
+        h: Optional[int] = None,
+        w: Optional[int] = None,
     ) -> torch.Tensor:
         B, N, C = x.shape
         qkv = (
@@ -87,6 +109,19 @@ class Attention(nn.Module):
         )
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
+
+        if self.use_rope:
+            q_b, q_h, q_n, q_d = q.shape
+            k_b, k_h, k_n, k_d = k.shape
+
+            q = q.permute(0, 2, 1, 3).reshape(q_b, q_n, q_h * q_d)
+            k = k.permute(0, 2, 1, 3).reshape(k_b, k_n, k_h * k_d)
+
+            q = compute_rope_embeddings(self.rope_frequencies, self.rope_dimension, q, h=h, w=w)
+            k = compute_rope_embeddings(self.rope_frequencies, self.rope_dimension, k, h=h, w=w)
+
+            q = q.reshape(q_b, q_n, q_h, q_d).permute(0, 2, 1, 3)
+            k = k.reshape(k_b, k_n, k_h, k_d).permute(0, 2, 1, 3)
 
         if not self.causal_block:
             x = F.scaled_dot_product_attention(
@@ -169,11 +204,11 @@ class DiTBlock(nn.Module):
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
 
-    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, causal_block=False, causal_block_size=32*32,**block_kwargs):
+    def __init__(self, hidden_size, num_heads, mlp_ratio=4.0, causal_block=False, causal_block_size=32*32, use_rope=False, rope_dimension=2, max_h=32, max_w=32, **block_kwargs):
         super().__init__()
         self.norm1 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         self.attn = Attention(
-            hidden_size, num_heads=num_heads, qkv_bias=True, causal_block=False, causal_block_size=32*32, **block_kwargs
+            hidden_size, num_heads=num_heads, qkv_bias=True, causal_block=False, causal_block_size=32*32, use_rope=use_rope, rope_dimension=rope_dimension, max_h=max_h, max_w=max_w, **block_kwargs
         )
         self.norm2 = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
@@ -188,7 +223,7 @@ class DiTBlock(nn.Module):
             nn.SiLU(), nn.Linear(hidden_size, 6 * hidden_size, bias=True)
         )
 
-    def forward(self, x, c):
+    def forward(self, x, c, h=None, w=None):
         (
             shift_msa,
             scale_msa,
@@ -198,7 +233,9 @@ class DiTBlock(nn.Module):
             gate_mlp,
         ) = self.adaLN_modulation(c).chunk(6, dim=1)
         x = x + gate_msa.unsqueeze(1) * self.attn(
-            modulate(self.norm1(x), shift_msa, scale_msa)
+            modulate(self.norm1(x), shift_msa, scale_msa),
+            h=h,
+            w=w
         )
         x = x + gate_mlp.unsqueeze(1) * self.mlp(
             modulate(self.norm2(x), shift_mlp, scale_mlp)
@@ -221,6 +258,10 @@ class DiT(nn.Module):
         learn_sigma=True,
         causal_block=False,
         causal_block_size=32 * 32,
+        use_rope=False,
+        rope_dimension=2,
+        max_h=32,
+        max_w=32,
     ):
         super().__init__()
         self.learn_sigma = learn_sigma
@@ -228,6 +269,7 @@ class DiT(nn.Module):
         self.num_patches = num_patches
         self.causal_block = causal_block
         self.causal_block_size = causal_block_size
+        self.use_rope = use_rope
 
         # check if the causal block divide the num_patches
         if causal_block and num_patches % causal_block_size != 0:
@@ -241,6 +283,10 @@ class DiT(nn.Module):
                     mlp_ratio=mlp_ratio,
                     causal_block=False,
                     causal_block_size=32 * 32,
+                    use_rope=use_rope,
+                    rope_dimension=rope_dimension,
+                    max_h=max_h,
+                    max_w=max_w,
                 )
                 for _ in range(depth)
             ]
@@ -262,13 +308,15 @@ class DiT(nn.Module):
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
             nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
 
-    def forward(self, x, t):
+    def forward(self, x, t, h=None, w=None):
         """
         Forward pass of DiT.
         x: (N, nb_seq, hidden_dim) tensor of spatial inputs (images or latent representations of images)
         t: (N, hidden_dim) tensor of diffusion timesteps
+        h: (int) height of the input
+        w: (int) width of the input
         """
 
         for block in self.blocks:
-            x = block(x, t)  # (N, T, D)
+            x = block(x, t, h=h, w=w)  # (N, T, D)
         return x

@@ -1,7 +1,7 @@
 import torch
 import pytest
 
-from dit_ml.dit import DiT
+from dit_ml.dit import DiT, Attention
 
 def test_dit_init():
     """Test the initialization of the DiT model."""
@@ -43,30 +43,11 @@ def test_dit_forward():
         learn_sigma=learn_sigma
     )
 
-    # Create dummy input data
-    # The forward method expects input x with shape (N, T, D) where T is num_patches and D is hidden_size
-    # The original code seems to expect (N, C, H, W) and then converts it. Let's follow the forward method's expected input shape after the initial conversion.
-    # Based on the forward method: `x = (x + self.pos_embed)` suggests x is already (N, T, D) or will be broadcasted.
-    # Let's assume the input x to the forward method is already in the shape (N, num_patches, hidden_size) after some initial processing (like patch embedding, which is not shown in the provided code).
-    # The timestep `t` is expected to be (N,)
     dummy_x = torch.randn(batch_size, input_size * input_size, hidden_size)
-
-    # The forward method signature is forward(self, x, t). It seems the original code snippet might be incomplete or assumes 'y' is handled elsewhere.
-    # Let's test with the provided signature: forward(self, x, t)
-    # The DiTBlock forward method takes (x, c). In DiT forward, 'c' is 't'.
-    # The adaLN_modulation layer in DiTBlock expects input of size (hidden_size).
-    # The timestep `t` is (N,). It needs to be processed to get the conditioning vector `c` of size (N, hidden_size).
-    # The provided DiT forward method does not show how `t` is converted to `c`.
-    # Let's assume for the test that the conditioning vector `c` is generated outside and passed to the forward method, or that `t` is expected to be (N, hidden_size).
-    # Looking at the DiTBlock's adaLN_modulation layer: `nn.Linear(hidden_size, 6 * hidden_size, bias=True)`
-    # This implies the conditioning vector `c` should have `hidden_size` features.
-    # Let's assume the `t` input to the DiT forward method is actually the processed conditioning vector `c` of shape (N, hidden_size).
-
     dummy_c = torch.randn(batch_size, hidden_size) # Dummy conditioning vector
 
     output = model(dummy_x, dummy_c)
 
-    # Expected output shape is (N, T, D)
     expected_output_shape = (batch_size, input_size * input_size, hidden_size)
     assert output.shape == expected_output_shape
 
@@ -109,3 +90,25 @@ def test_dit_causal_block_invalid_size():
             causal_block=True,
             causal_block_size=4,
         )
+
+def test_rope_attention():
+    """Test the Attention module with RoPE enabled."""
+    batch_size = 2
+    h = 8
+    w = 8
+    dim = 64
+    num_heads = 4
+
+    # With RoPE
+    attn_rope = Attention(dim, num_heads, use_rope=True, max_h=h, max_w=w)
+    dummy_x = torch.randn(batch_size, h * w, dim)
+    output_rope = attn_rope(dummy_x, h=h, w=w)
+    assert output_rope.shape == dummy_x.shape
+
+    # Without RoPE
+    attn_no_rope = Attention(dim, num_heads, use_rope=False)
+    output_no_rope = attn_no_rope(dummy_x, h=h, w=w)
+    assert output_no_rope.shape == dummy_x.shape
+
+    # Check that the outputs are different
+    assert not torch.allclose(output_rope, output_no_rope)
