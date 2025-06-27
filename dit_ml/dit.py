@@ -259,7 +259,7 @@ class DiTBlock(nn.Module):
             nn.SiLU(), nn.Linear(hidden_size, 6 * hidden_size, bias=True)
         )
 
-    def forward(self, x, c, h=None, w=None):
+    def forward(self, x, c):
         (
             shift_msa,
             scale_msa,
@@ -344,7 +344,7 @@ class DiT(nn.Module):
             nn.init.constant_(block.adaLN_modulation[-1].weight, 0)
             nn.init.constant_(block.adaLN_modulation[-1].bias, 0)
 
-    def forward(self, x, t, h=None, w=None):
+    def forward(self, x, t):
         """
         Forward pass of DiT.
         x: (N, nb_seq, hidden_dim) tensor of spatial inputs (images or latent representations of images)
@@ -354,5 +354,5 @@ class DiT(nn.Module):
         """
 
         for block in self.blocks:
-            x = block(x, t, h=h, w=w)  # (N, T, D)
+            x = block(x, t)  # (N, T, D)
         return x
