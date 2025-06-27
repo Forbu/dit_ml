@@ -4,6 +4,11 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from torch.nn.attention.flex_attention import (
+    flex_attention,
+    create_block_mask,
+)
+
 from timm.models.vision_transformer import Mlp
 from dit_ml.rope import init_rope_frequencies, compute_mixed_rope_embeddings
 
@@ -72,7 +77,7 @@ class Attention(nn.Module):
 
         self.causal_block = causal_block
         self.causal_block_size = causal_block_size
-        
+
         self.h = max_h
         self.w = max_w
         self.d = max_d
@@ -86,14 +91,8 @@ class Attention(nn.Module):
                 max_depth=max_d,
             )
 
-        if causal_block:
-            from torch.nn.attention.flex_attention import (
-                flex_attention,
-                create_block_mask,
-            )
-
-            def causal_mask(b, h, q_idx, kv_idx):
-                return q_idx + self.causal_block_size >= kv_idx
+        def causal_mask(b, h, q_idx, kv_idx):
+            return q_idx + self.causal_block_size >= kv_idx
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -135,7 +134,12 @@ class Attention(nn.Module):
                 d=self.d,
             )
 
-        if not self.causal_block:
+        if self.causal_block:
+            block_mask = create_block_mask(
+                causal_mask, B, self.num_heads, N, N, device=self.device
+            )
+            x = flex_attention(q, k, v, block_mask=block_mask)
+        else:
             x = F.scaled_dot_product_attention(
                 q,
                 k,
@@ -143,17 +147,12 @@ class Attention(nn.Module):
                 attn_mask=attn_mask,
                 dropout_p=self.attn_drop.p if self.training else 0.0,
             )
-        else:
-            block_mask = create_block_mask(
-                causal_mask, B, self.num_heads, N, N, device=self.device
-            )
-            x = flex_attention(q, k, v, block_mask=block_mask)
-
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.norm(x)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
+
 
 class DiTBlock(nn.Module):
     """
