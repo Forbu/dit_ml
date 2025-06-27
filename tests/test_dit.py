@@ -89,7 +89,7 @@ def test_dit_causal_block_rope_init():
     num_heads = 4
     learn_sigma = True
     causal_block = True
-    causal_block_size = input_size * input_size
+    causal_block_size = h*w
 
     model = DiT(
         num_patches=h * w * d,
