@@ -120,7 +120,7 @@ class Attention(nn.Module):
 
         if self.use_rope:
             q = compute_mixed_rope_embeddings(
-                self.rope_frequencies
+                self.rope_frequencies,
                 self.rope_dimension,
                 q,
                 h=h,
@@ -128,7 +128,7 @@ class Attention(nn.Module):
                 d=d,
             )
             k = compute_mixed_rope_embeddings(
-                self.rope_frequencies
+                self.rope_frequencies,
                 self.rope_dimension,
                 k,
                 h=h,
