@@ -72,6 +72,10 @@ class Attention(nn.Module):
 
         self.causal_block = causal_block
         self.causal_block_size = causal_block_size
+        
+        self.h = max_h
+        self.w = max_w
+        self.d = max_d
 
         if self.use_rope:
             self.rope_frequencies = init_rope_frequencies(
@@ -103,9 +107,6 @@ class Attention(nn.Module):
         self,
         x: torch.Tensor,
         attn_mask: Optional[torch.Tensor] = None,
-        h: Optional[int] = None,
-        w: Optional[int] = None,
-        d: Optional[int] = None,
     ) -> torch.Tensor:
         B, N, C = x.shape
         qkv = (
@@ -121,17 +122,17 @@ class Attention(nn.Module):
                 self.rope_frequencies,
                 self.rope_dimension,
                 q,
-                h=h,
-                w=w,
-                d=d,
+                h=self.h,
+                w=self.w,
+                d=self.d,
             )
             k = compute_mixed_rope_embeddings(
                 self.rope_frequencies,
                 self.rope_dimension,
                 k,
-                h=h,
-                w=w,
-                d=d,
+                h=self.h,
+                w=self.w,
+                d=self.d,
             )
 
         if not self.causal_block:

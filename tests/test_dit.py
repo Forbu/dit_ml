@@ -78,6 +78,41 @@ def test_dit_causal_block_init():
     assert len(model.blocks) == depth
 
 
+def test_dit_causal_block_rope_init():
+    """Test the initialization of the DiT model with causal_block enabled."""
+    input_size = 8
+    h = 4
+    w = 4
+    d = 2
+    hidden_size = 16
+    depth = 2
+    num_heads = 4
+    learn_sigma = True
+    causal_block = True
+    causal_block_size = input_size * input_size
+
+    model = DiT(
+        num_patches=h * w * d,
+        hidden_size=hidden_size,
+        depth=depth,
+        num_heads=num_heads,
+        learn_sigma=learn_sigma,
+        causal_block=causal_block,
+        causal_block_size=h*w,
+        rope_dimension=3,
+        use_rope = True,
+        max_h = h,
+        max_w = w,
+        max_d = d,
+    )
+
+    assert isinstance(model, DiT)
+    assert model.causal_block is causal_block
+    assert model.causal_block_size == causal_block_size
+    assert len(model.blocks) == depth
+
+
+
 def test_dit_causal_block_invalid_size():
     """Test initializing DiT with an invalid causal_block_size raises an error."""
     with pytest.raises(Exception):
